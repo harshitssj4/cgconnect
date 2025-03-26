@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genome Connections Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        #game-board {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .tile {
+            background-color: #f0f0f0;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            padding: 15px 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            min-height: 50px;
+        }
+        .tile.selected {
+            background-color: #b8d8ff;
+            border-color: #3a82ff;
+        }
+        .tile.correct-yellow {
+            background-color: #f9df6d;
+            border-color: #f9df6d;
+            color: #000;
+        }
+        .tile.correct-green {
+            background-color: #a0c35a;
+            border-color: #a0c35a;
+            color: #fff;
+        }
+        .tile.correct-blue {
+            background-color: #6aacee;
+            border-color: #6aacee;
+            color: #fff;
+        }
+        .tile.correct-purple {
+            background-color: #b88cd2;
+            border-color: #b88cd2;
+            color: #fff;
+        }
+        .tile.error {
+            background-color: #ff8888;
+            border-color: #ff6666;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            background-color: #3a82ff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 0 5px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .attempts {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .categories {
+            margin-top: 30px;
+        }
+        .category {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .category.yellow {
+            background-color: #f9df6d;
+            color: #000;
+        }
+        .category.green {
+            background-color: #a0c35a;
+            color: #fff;
+        }
+        .category.blue {
+            background-color: #6aacee;
+            color: #fff;
+        }
+        .category.purple {
+            background-color: #b88cd2;
+            color: #fff;
+        }
+        .hidden {
+            display: none;
+        }
+        #share-section {
+            margin-top: 30px;
+        }
+        .title-emoji {
+            font-size: 1.5rem;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1><span class="title-emoji">🧬</span>Genome Connections</h1>
+    <p class="subtitle">Find groups of four items that share something in common.</p>
+    
+    <div id="game-board"></div>
+    
+    <div class="controls">
+        <button id="submit-btn" disabled>Submit</button>
+        <button id="clear-btn">Clear Selection</button>
+        <div class="attempts" id="attempts-left">4 attempts remaining</div>
+    </div>
+    
+    <div class="categories hidden" id="categories-container">
+        <h2>Categories Found:</h2>
+        <div id="categories-list"></div>
+    </div>
+    
+    <div id="results" class="hidden">
+        <h2>Game Complete!</h2>
+        <p id="final-result"></p>
+    </div>
+    
+    <div id="share-section" class="hidden">
+        <h3>Share Your Results:</h3>
+        <button id="share-btn">Copy Results to Clipboard</button>
+    </div>
+
+    <script>
+        // Game data with the genome categories
+        const GAME_DATA = {
+            categories: [
+                { 
+                    name: "PUBLISHER GENOME", 
+                    color: "yellow", 
+                    items: ["Publishing Frequency", "Mobile Responsiveness", "Brand Rating", "Editorial Policies"] 
+                },
+                { 
+                    name: "USER GENOME", 
+                    color: "green", 
+                    items: ["Attention Span", "Location", "Frequency", "Interests"] 
+                },
+                { 
+                    name: "CONTENT GENOME", 
+                    color: "blue", 
+                    items: ["Quality", "Word Count", "Format", "Headline"] 
+                },
+                { 
+                    name: "ECONOMIC GENOME", 
+                    color: "purple", 
+                    items: ["PPP", "Volatility", "Bid & Ask Spread", "Inflation"] 
+                }
+            ]
+        };
+
+        // Game state
+        let gameState = {
+            selectedTiles: [],
+            foundCategories: [],
+            remainingAttempts: 4,
+            gameCompleted: false,
+            tiles: []
+        };
+
+        // Initialize the game
+        function initGame() {
+            const gameBoard = document.getElementById('game-board');
+            gameBoard.innerHTML = '';
+            
+            // Flatten all items and shuffle them
+            let allItems = [];
+            GAME_DATA.categories.forEach(category => {
+                category.items.forEach(item => {
+                    allItems.push({
+                        text: item,
+                        category: category.name,
+                        color: category.color
+                    });
+                });
+            });
+            
+            // Shuffle the items
+            allItems = shuffleArray(allItems);
+            
+            // Create tiles
+            allItems.forEach((item, index) => {
+                const tile = document.createElement('div');
+                tile.className = 'tile';
+                tile.textContent = item.text;
+                tile.dataset.index = index;
+                tile.addEventListener('click', () => toggleTile(tile, item));
+                gameBoard.appendChild(tile);
+                gameState.tiles.push({
+                    element: tile,
+                    data: item
+                });
+            });
+        }
+
+        // Toggle tile selection
+        function toggleTile(tileElement, tileData) {
+            if (gameState.gameCompleted) return;
+            if (tileElement.classList.contains('selected')) {
+                tileElement.classList.remove('selected');
+                gameState.selectedTiles = gameState.selectedTiles.filter(t => t.element !== tileElement);
+            } else {
+                if (gameState.selectedTiles.length < 4) {
+                    tileElement.classList.add('selected');
+                    gameState.selectedTiles.push({
+                        element: tileElement,
+                        data: tileData
+                    });
+                }
+            }
+            
+            document.getElementById('submit-btn').disabled = gameState.selectedTiles.length !== 4;
+        }
+
+        // Submit the selected tiles
+        function submitSelection() {
+            if (gameState.selectedTiles.length !== 4) return;
+            
+            // Check if all selected tiles belong to the same category
+            const categories = gameState.selectedTiles.map(tile => tile.data.category);
+            const allSameCategory = categories.every(cat => cat === categories[0]);
+            
+            if (allSameCategory) {
+                // Correct selection
+                const categoryName = categories[0];
+                const categoryColor = gameState.selectedTiles[0].data.color;
+                
+                // Mark tiles as correct
+                gameState.selectedTiles.forEach(tile => {
+                    tile.element.className = `tile correct-${categoryColor}`;
+                });
+                
+                // Add to found categories
+                gameState.foundCategories.push({
+                    name: categoryName,
+                    color: categoryColor
+                });
+                
+                // Update categories display
+                updateCategoriesDisplay();
+                
+                // Clear selection
+                gameState.selectedTiles = [];
+                document.getElementById('submit-btn').disabled = true;
+                
+                // Check if game is complete
+                if (gameState.foundCategories.length === 4) {
+                    completeGame(true);
+                }
+            } else {
+                // Incorrect selection
+                gameState.remainingAttempts--;
+                updateAttemptsDisplay();
+                
+                // Briefly show error
+                gameState.selectedTiles.forEach(tile => {
+                    tile.element.classList.add('error');
+                    setTimeout(() => {
+                        tile.element.classList.remove('error');
+                        tile.element.classList.remove('selected');
+                    }, 800);
+                });
+                
+                // Clear selection after delay
+                setTimeout(() => {
+                    gameState.selectedTiles = [];
+                    document.getElementById('submit-btn').disabled = true;
+                }, 800);
+                
+                // Check if out of attempts
+                if (gameState.remainingAttempts === 0) {
+                    completeGame(false);
+                }
+            }
+        }
+
+        // Update the attempts display
+        function updateAttemptsDisplay() {
+            document.getElementById('attempts-left').textContent = 
+                gameState.remainingAttempts === 1 
+                    ? '1 attempt remaining' 
+                    : `${gameState.remainingAttempts} attempts remaining`;
+        }
+
+        // Update categories display
+        function updateCategoriesDisplay() {
+            const categoriesContainer = document.getElementById('categories-container');
+            const categoriesList = document.getElementById('categories-list');
+            
+            categoriesContainer.classList.remove('hidden');
+            categoriesList.innerHTML = '';
+            
+            gameState.foundCategories.forEach(category => {
+                const categoryEl = document.createElement('div');
+                categoryEl.className = `category ${category.color}`;
+                categoryEl.textContent = category.name;
+                categoriesList.appendChild(categoryEl);
+            });
+        }
+
+        // Complete the game
+        function completeGame(success) {
+            gameState.gameCompleted = true;
+            
+            // Show results
+            const results = document.getElementById('results');
+            const finalResult = document.getElementById('final-result');
+            results.classList.remove('hidden');
+            
+            if (success) {
+                finalResult.textContent = 'Congratulations! You found all genome connections!';
+            } else {
+                finalResult.textContent = 'Game over! You ran out of attempts.';
+                
+                // Reveal remaining categories
+                GAME_DATA.categories.forEach(category => {
+                    if (!gameState.foundCategories.some(found => found.name === category.name)) {
+                        // Find tiles for this category
+                        const categoryTiles = gameState.tiles.filter(tile => tile.data.category === category.name);
+                        
+                        // Mark them with correct color
+                        categoryTiles.forEach(tile => {
+                            tile.element.className = `tile correct-${category.color}`;
+                        });
+                        
+                        // Add to found categories for display
+                        gameState.foundCategories.push({
+                            name: category.name,
+                            color: category.color
+                        });
+                    }
+                });
+                
+                updateCategoriesDisplay();
+            }
+            
+            // Show share section
+            document.getElementById('share-section').classList.remove('hidden');
+        }
+
+        // Clear selection
+        function clearSelection() {
+            gameState.selectedTiles.forEach(tile => {
+                tile.element.classList.remove('selected');
+            });
+            gameState.selectedTiles = [];
+            document.getElementById('submit-btn').disabled = true;
+        }
+
+        // Share results
+        function shareResults() {
+            let resultText = "🧬 Genome Connections Results 🧬\n\n";
+            
+            if (gameState.gameCompleted) {
+                if (gameState.foundCategories.length === 4 && gameState.remainingAttempts > 0) {
+                    const attemptsUsed = 4 - gameState.remainingAttempts;
+                    resultText += `Solved in ${attemptsUsed} ${attemptsUsed === 1 ? 'attempt' : 'attempts'}!\n`;
+                } else {
+                    resultText += "Didn't solve it this time.\n";
+                }
+            }
+            
+            resultText += "\nCategories Identified:\n";
+            gameState.foundCategories.forEach(category => {
+                let emoji = "🟡";
+                if (category.color === "green") emoji = "🟢";
+                if (category.color === "blue") emoji = "🔵";
+                if (category.color === "purple") emoji = "🟣";
+                
+                resultText += `${emoji} ${category.name}\n`;
+            });
+            
+            navigator.clipboard.writeText(resultText)
+                .then(() => {
+                    alert("Results copied to clipboard!");
+                })
+                .catch(err => {
+                    console.error('Failed to copy: ', err);
+                    alert("Couldn't copy to clipboard. Here are your results:\n\n" + resultText);
+                });
+        }
+
+        // Shuffle array (Fisher-Yates algorithm)
+        function shuffleArray(array) {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        // Set up event listeners
+        document.getElementById('submit-btn').addEventListener('click', submitSelection);
+        document.getElementById('clear-btn').addEventListener('click', clearSelection);
+        document.getElementById('share-btn').addEventListener('click', shareResults);
+
+        // Initialize the game when page loads
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>
